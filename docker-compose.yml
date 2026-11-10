@@ -9,6 +9,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://telecom:telecom_dev_password@db:5432/telecom
       REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT: ${RATE_LIMIT:-120/minute}
+      PLANS_RATE_LIMIT: ${PLANS_RATE_LIMIT:-200/minute}
+      PLAN_CACHE_TTL_SECONDS: ${PLAN_CACHE_TTL_SECONDS:-60}
     depends_on:
       db:
         condition: service_healthy

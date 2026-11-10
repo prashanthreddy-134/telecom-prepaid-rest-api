@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     # API rate limiting
     rate_limit: str = "120/minute"
+    plans_rate_limit: str = "200/minute"
 
     # Redis cache configuration
     redis_url: str = "redis://localhost:6379/0"

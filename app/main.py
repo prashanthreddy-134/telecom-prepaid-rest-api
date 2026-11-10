@@ -275,7 +275,7 @@ def me(
     response_model=PlanListOut,
     tags=["plans"],
 )
-@limiter.limit("200/minute")
+@limiter.limit(settings.plans_rate_limit, override_defaults=True)
 def plans(
     request: Request,
     q: str | None = None,
