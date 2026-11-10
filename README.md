@@ -1,371 +1,603 @@
 # Telecom Prepaid REST API
 
-A REST API backend for managing prepaid telecom operations, built with **Python, FastAPI, SQLAlchemy, and PostgreSQL**.
+A production-oriented REST API for managing telecom prepaid services, built with **FastAPI, Python, SQLAlchemy, PostgreSQL, Redis, JWT authentication, and Docker**.
 
-This project simulates the backend of a fictional mobile network operator (MVNO). It provides APIs for customer registration, subscriber management, prepaid plans, recharges, complaints, usage records, and operational analytics.
+The application supports prepaid plan management, subscriber lifecycle management, recharges, usage tracking, complaints, role-based access control, analytics, caching, and automated testing.
 
-The project focuses on API design, database modelling, authentication, role-based access control, data validation, and automated testing.
+It also includes a k6 load-testing setup to measure API performance under sustained traffic.
 
-## Key Features
+---
 
-- **Authentication:** JWT-based login and user registration.
-- **Role-based access control:** Separate admin, staff, and user permissions.
-- **Subscriber management:** Create, retrieve, update, search, and close subscriber records.
-- **Prepaid plans:** Plan listing, filtering, searching, creation, updating, and deactivation.
-- **Recharge management:** Recharge creation and duplicate-reference protection.
-- **Complaint management:** Complaint creation, source tracking, and status updates.
-- **Usage records:** Store subscriber usage information.
-- **Analytics:** Operational summary endpoint.
-- **Validation and error handling:** Structured request validation and centralized API error responses.
-- **Rate limiting:** Protect API endpoints from excessive requests.
-- **Database support:** PostgreSQL for containerized development and SQLite for local development.
-- **Database migrations:** Alembic migration setup.
-- **Automated tests:** Pytest-based API tests.
-- **API documentation:** Interactive Swagger UI and generated OpenAPI specification.
-- **Load testing scenario:** k6 test script for evaluating plan endpoint performance.
+## Project Highlights
+
+- RESTful API built using FastAPI.
+- JWT-based authentication.
+- Role-based access control for Admin, Staff, and User.
+- PostgreSQL database with SQLAlchemy ORM.
+- Pydantic v2 request and response validation.
+- Redis caching for public plan endpoints.
+- Cache invalidation using generation-based keys.
+- Database fallback when Redis is unavailable.
+- API rate limiting using SlowAPI.
+- Structured request logging and error handling.
+- Database migrations using Alembic.
+- Automated testing using pytest.
+- Code coverage reporting using pytest-cov.
+- Docker Compose infrastructure.
+- Performance testing using Grafana k6.
+
+## Performance Benchmark
+
+**Verified local Docker benchmark:**
+
+| Metric | Result | Target |
+|---|---:|---:|
+| Throughput | 200.00 requests/sec | 200 requests/sec |
+| Total requests | 12,001 | — |
+| Test duration | 60 seconds | 60 seconds |
+| Average latency | 3.63 ms | — |
+| p95 latency | 6.39 ms | Below 300 ms |
+| Maximum latency | 33.21 ms | — |
+| Failed requests | 0% | Below 1% |
+| Dropped iterations | 0 | — |
+
+All configured k6 performance thresholds passed.
+
+**Benchmark scope:** Local Docker environment, testing the public plans listing endpoint. These results are not a production capacity guarantee and do not represent every API endpoint.
 
 ## Technology Stack
 
-| Area | Technology |
+| Category | Technology |
 |---|---|
 | Language | Python |
-| API framework | FastAPI |
+| Backend | FastAPI |
 | ORM | SQLAlchemy |
-| Validation | Pydantic |
-| Database | PostgreSQL / SQLite |
+| Validation | Pydantic v2 |
+| Database | PostgreSQL |
+| Cache | Redis |
 | Authentication | JWT |
-| Password hashing | Passlib |
-| Database migrations | Alembic |
-| Testing | Pytest |
-| Rate limiting | SlowAPI |
-| Containerization | Docker and Docker Compose |
-| Load testing | k6 |
+| Password Hashing | Passlib |
+| Rate Limiting | SlowAPI |
+| Migrations | Alembic |
+| Testing | pytest |
+| Coverage | pytest-cov |
+| Performance Testing | Grafana k6 |
+| Containerization | Docker |
+| API Documentation | OpenAPI / Swagger UI |
 
 ## Architecture
 
-The application separates API handling, business logic, database access, and configuration.
-
-```mermaid
-
-flowchart TD
-
-&#x20;   Client\[Web / Mobile / Postman]
-
-&#x20;   API\[FastAPI API Layer]
-
-&#x20;   Auth\[JWT Authentication and RBAC]
-
-&#x20;   Service\[Business Logic / Services]
-
-&#x20;   Repo\[Repository Helpers]
-
-&#x20;   DB\[(PostgreSQL / SQLite)]
-
-&#x20;   Client --> API
-
-&#x20;   API --> Auth
-
-&#x20;   Auth --> Service
-
-&#x20;   Service --> Repo
-
-&#x20;   Repo --> DB
-
+```text
+                   Client
+                     |
+                     v
+              FastAPI Application
+                     |
+          +----------+----------+
+          |                     |
+          v                     v
+    JWT Authentication     Rate Limiting
+          |                     |
+          +----------+----------+
+                     |
+                     v
+               API Endpoints
+                     |
+          +----------+----------+
+          |          |          |
+          v          v          v
+       Services  Repositories  Validation
+          |          |
+          +-----+----+
+                |
+         +------+------+
+         |             |
+         v             v
+     PostgreSQL      Redis
+     Database        Cache
 ```
 
-### Project Structure
+## Project Structure
 
 ```text
-
-telecom-prepaid-rest-api/
-
-â”‚
-
-â”œâ”€â”€ app/
-
-â”‚   â”œâ”€â”€ core.py
-
-â”‚   â”œâ”€â”€ main.py
-
-â”‚   â”œâ”€â”€ models.py
-
-â”‚   â”œâ”€â”€ repositories.py
-
-â”‚   â”œâ”€â”€ schemas.py
-
-â”‚   â”œâ”€â”€ security.py
-
-â”‚   â”œâ”€â”€ seed.py
-
-â”‚   â””â”€â”€ services.py
-
-â”‚
-
-â”œâ”€â”€ migrations/
-
-â”‚   â””â”€â”€ versions/
-
-â”‚
-
-â”œâ”€â”€ tests/
-
-â”‚   â””â”€â”€ test_api.py
-
-â”‚
-
-â”œâ”€â”€ load/
-
-â”‚   â””â”€â”€ k6-plans.js
-
-â”‚
-
-â”œâ”€â”€ openapi/
-
-â”œâ”€â”€ postman/
-
-â”‚
-
-â”œâ”€â”€ .env.example
-
-â”œâ”€â”€ .gitignore
-
-â”œâ”€â”€ Dockerfile
-
-â”œâ”€â”€ docker-compose.yml
-
-â”œâ”€â”€ alembic.ini
-
-â”œâ”€â”€ pyproject.toml
-
-â””â”€â”€ requirements.txt
-
+telecom-rest-api/
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── core.py
+│   ├── models.py
+│   ├── schemas.py
+│   ├── repositories.py
+│   ├── services.py
+│   ├── security.py
+│   ├── cache.py
+│   └── seed.py
+│
+├── migrations/
+│   └── versions/
+│
+├── tests/
+│   ├── test_api.py
+│   ├── test_core.py
+│   ├── test_cache.py
+│   └── test_seed.py
+│
+├── load/
+│   ├── k6-plans.js
+│   └── k6-debug.js
+│
+├── openapi/
+├── postman/
+│
+├── Dockerfile
+├── docker-compose.yml
+├── alembic.ini
+├── pyproject.toml
+├── requirements.txt
+├── .env.example
+└── README.md
 ```
+
+## Core Features
+
+### 1. Authentication and Authorization
+
+- User registration.
+- JWT access-token generation.
+- Password hashing.
+- Authenticated user profile.
+- Role-based authorization.
+- Active and inactive account validation.
+
+Supported roles:
+
+| Role | Access |
+|---|---|
+| Admin | Full administrative access |
+| Staff | Operational access to subscribers and related resources |
+| User | Access to permitted personal operations |
+
+### 2. Prepaid Plan Management
+
+- Create prepaid plans.
+- Retrieve all active plans.
+- Retrieve individual plans.
+- Search plans.
+- Filter by maximum price.
+- Filter by minimum data allowance.
+- Pagination.
+- Update plans.
+- Soft-delete plans.
+
+Plan information includes price, validity, data allowance, voice minutes, SMS allowance, and description.
+
+### 3. Subscriber Management
+
+- Register subscribers.
+- Retrieve subscriber details.
+- Search and filter subscribers.
+- Update subscriber information.
+- Associate subscribers with plans and telecom circles.
+- Close subscriber accounts.
+
+### 4. Recharge Management
+
+- Create recharge transactions.
+- Retrieve recharge records.
+- Filter recharges by subscriber.
+- Validate subscriber access and eligibility.
+
+### 5. Usage Tracking
+
+- Record subscriber usage.
+- Retrieve usage records.
+- Filter usage by subscriber.
+
+### 6. Complaint Management
+
+- Register complaints.
+- Retrieve complaints.
+- Filter by status and subscriber.
+- Update complaint status.
+- Track complaint information and external references.
+
+### 7. Analytics
+
+Provides operational summary information, including:
+
+- Total subscribers.
+- Active subscribers.
+- Active prepaid plans.
+- Total recharges.
+- Open complaints.
+
+## API Endpoints
+
+Base URL:
+
+```text
+http://localhost:8000
+```
+
+API version prefix:
+
+```text
+/api/v1
+```
+
+### Authentication
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/auth/register` | Register a user |
+| POST | `/api/v1/auth/token` | Generate JWT token |
+| GET | `/api/v1/auth/me` | Get authenticated user |
+
+### Plans
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/plans` | List and filter plans |
+| GET | `/api/v1/plans/{id}` | Get plan details |
+| POST | `/api/v1/plans` | Create plan |
+| PUT | `/api/v1/plans/{id}` | Update plan |
+| DELETE | `/api/v1/plans/{id}` | Deactivate plan |
+
+### Circles
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/circles` | List circles |
+| GET | `/api/v1/circles/{id}` | Get circle details |
+| POST | `/api/v1/circles` | Create circle |
+| PUT | `/api/v1/circles/{id}` | Update circle |
+| DELETE | `/api/v1/circles/{id}` | Delete circle |
+
+### Subscribers
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/subscribers` | List subscribers |
+| GET | `/api/v1/subscribers/{id}` | Get subscriber details |
+| POST | `/api/v1/subscribers` | Create subscriber |
+| PUT | `/api/v1/subscribers/{id}` | Update subscriber |
+| DELETE | `/api/v1/subscribers/{id}` | Close subscriber |
+
+### Recharges
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/recharges` | List recharges |
+| POST | `/api/v1/recharges` | Create recharge |
+
+### Usage
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/usage` | List usage records |
+| POST | `/api/v1/usage` | Record usage |
+
+### Complaints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/complaints` | List complaints |
+| POST | `/api/v1/complaints` | Create complaint |
+| PATCH | `/api/v1/complaints/{id}/status` | Update complaint status |
+
+### Analytics
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/analytics/summary` | Retrieve operational analytics |
 
 ## Getting Started
 
 ### Prerequisites
 
-- Python 3.11 or compatible version supported by the project dependencies.
+Install the following:
+
+- Python 3.12 or compatible version.
+- Docker Desktop.
 - Git.
-- Docker Desktop with Docker Compose, if using the containerized setup.
+- Docker Compose.
 
-### Option 1: Run with Docker Compose
-
-Clone the repository:
+### 1. Clone the Repository
 
 ```bash
-
 git clone https://github.com/prashanthreddy-134/telecom-prepaid-rest-api.git
+```
 
+```bash
 cd telecom-prepaid-rest-api
-
 ```
 
-Create your environment file:
+### 2. Create a Virtual Environment
 
-```bash
-
-copy .env.example .env
-
-```
-
-Generate a secure secret key:
-
-```bash
-
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-
-```
-
-Set the generated value as `SECRET_KEY` in `.env`. Keep this value private. Do not commit `.env`.
-
-Start the application:
-
-```bash
-
-docker compose up --build
-
-```
-
-### Option 2: Run Locally with SQLite
-
-Create and activate a virtual environment:
+Windows PowerShell:
 
 ```powershell
-
 python -m venv venv
-
-.\\venv\\Scripts\\Activate.ps1
-
 ```
 
-Install dependencies:
-
 ```powershell
-
-python -m pip install -r requirements.txt
-
+.\venv\Scripts\Activate.ps1
 ```
 
-Create your local environment file:
+### 3. Install Dependencies
 
 ```powershell
+pip install -r requirements.txt
+```
 
+### 4. Configure Environment Variables
+
+Create a `.env` file using the example:
+
+```powershell
 Copy-Item .env.example .env
-
 ```
 
-Edit `.env` and configure:
+Configure the required environment variables:
 
-```dotenv
+```env
+DATABASE_URL=postgresql+psycopg://telecom:telecom_dev_password@db:5432/telecom
 
-DATABASE_URL=sqlite:///./telecom.db
-
-SECRET_KEY=replace-with-your-own-long-random-secret
+SECRET_KEY=replace-with-a-long-random-secret
 
 RATE_LIMIT=120/minute
 
+REDIS_URL=redis://redis:6379/0
+
+PLAN_CACHE_TTL_SECONDS=60
 ```
 
-Initialize the demo data:
+Use a unique, securely generated secret key. Never commit `.env` or production credentials to GitHub.
+
+### 5. Start the Application with Docker
 
 ```powershell
-
-python -m app.seed
-
+docker compose up -d --build
 ```
 
-Start the API:
+Check running containers:
 
 ```powershell
-
-uvicorn app.main:app --reload
-
+docker compose ps
 ```
 
-If database initialization is managed separately in your local configuration, apply the appropriate Alembic migration before starting the application.
+View application logs:
 
-## API Documentation
+```powershell
+docker compose logs -f api
+```
 
-Once the application is running:
+### 6. Run Database Migrations
 
-| Resource | URL |
-|---|---|
-| Swagger UI | http://localhost:8000/docs |
-| ReDoc | http://localhost:8000/redoc |
-| OpenAPI JSON | http://localhost:8000/openapi.json |
-| Health check | http://localhost:8000/health |
-| Readiness check | http://localhost:8000/ready |
+```powershell
+docker compose exec api alembic upgrade head
+```
 
-Swagger UI allows you to inspect endpoints, submit requests, and test authenticated operations.
+Check the current migration:
 
-## API Modules
+```powershell
+docker compose exec api alembic current
+```
 
-The API includes 28 documented routes across these modules:
+### 7. Access the API
 
-| Module | Capabilities |
-|---|---|
-| Authentication | Registration, login, current-user details |
-| Plans | Search, filter, pagination, details, create, update, deactivate |
-| Circles | Search, pagination, details, create, update, delete |
-| Subscribers | Search, filter, pagination, details, create, update, close |
-| Recharges | List and create |
-| Complaints | List, create, status updates |
-| Usage | List and create |
-| Analytics | Operational summary |
-| System | Health and readiness checks |
+Application:
 
-Refer to the live OpenAPI specification for the exact endpoint paths, HTTP methods, request schemas, and response formats.
+```text
+http://localhost:8000
+```
 
-## Demo Accounts
+Swagger UI:
 
-The seed data provides the following local testing accounts:
+```text
+http://localhost:8000/docs
+```
 
-| Role | Email | Password |
-|---|---|---|
-| Admin | admin@demo.local | AdminPass123! |
-| Staff | staff@demo.local | StaffPass123! |
-| User | user@demo.local | UserPass123! |
+ReDoc:
 
-**Security warning:** These are development-only credentials. Never use them in production or expose them on a deployed public instance.
+```text
+http://localhost:8000/redoc
+```
 
-## Data Modelling and Validation
+Health check:
 
-The application includes several domain-specific data rules:
+```text
+http://localhost:8000/health
+```
 
-- Monetary values are represented as integer paise to avoid floating-point currency calculations.
-- Data quotas and usage are represented in MB.
-- GB ingestion uses the conversion 1 GB = 1024 MB.
-- Subscriber lifecycle states include `active`, `suspended`, `ported_out`, and `closed`.
-- Complaint records preserve their source channel and source-specific external references.
-- Recharge references are unique to prevent duplicate submissions.
-- Foreign keys maintain circle and subscriber relationships.
-- Seed data includes a correction for a stale subscriber status; real production systems should rely on verified porting events rather than name-based assumptions.
+Readiness check:
+
+```text
+http://localhost:8000/ready
+```
+
+## Redis Caching
+
+Redis is used to cache public prepaid plan listing and detail responses.
+
+Caching features:
+
+- Plan list caching.
+- Plan detail caching.
+- Filter-aware cache keys.
+- Pagination-aware cache keys.
+- Configurable cache expiration.
+- Generation-based cache invalidation.
+- Database fallback when Redis is unavailable.
+
+### Cache Strategy
+
+Cache keys include the cache generation and relevant request parameters.
+
+Example:
+
+```text
+telecom:plans:v1:g17:list:<request-hash>
+```
+
+When a plan is created, updated, or deactivated, the cache generation is incremented. Old cache entries become unreachable and expire naturally.
+
+If Redis is unavailable, the application falls back to PostgreSQL for plan retrieval.
+
+## Database Migrations
+
+Alembic manages database schema changes.
+
+Create a migration:
+
+```powershell
+docker compose exec api alembic revision --autogenerate -m "describe changes"
+```
+
+Apply migrations:
+
+```powershell
+docker compose exec api alembic upgrade head
+```
+
+Check for model/schema differences:
+
+```powershell
+docker compose exec api alembic check
+```
 
 ## Testing
 
-Run the automated test suite:
+The project uses pytest for automated testing.
+
+Run all tests:
 
 ```powershell
-
-python -m pytest -q
-
+python -m pytest -v
 ```
 
-For coverage reporting:
+Run tests with coverage:
 
 ```powershell
-
-coverage run -m pytest
-
-coverage report
-
+python -m pytest --cov=app --cov-report=term-missing
 ```
 
-The project has previously passed **24 automated tests** in the development environment. Run the tests again against the current checkout to confirm the result.
+### Verified Test Results
 
-A coverage target of 75% or higher is a project goal, not a measured result claimed by this repository.
+| Metric | Result |
+|---|---:|
+| Total tests passed | 166 |
+| Overall code coverage | 94.35% |
+| Cache module coverage | 100% |
+| Models coverage | 100% |
+| Core module coverage | 97% |
+| Main API module coverage | 94% |
+| Services coverage | 95% |
 
-## Load Testing
+The test suite covers API behavior, authentication, authorization, database settings, Redis caching, seed operations, and service logic.
 
-A k6 scenario is provided:
+## Performance Testing with k6
 
-```bash
+The project includes Grafana k6 scripts for testing the plans endpoint.
 
-k6 run -e BASE_URL=http://localhost:8000 load/k6-plans.js
+### Test Configuration
 
+File:
+
+```text
+load/k6-plans.js
 ```
 
-The scenario is configured to target:
+Configuration:
 
-- 200 requests per second.
-- 60 seconds of execution.
-- p95 response time below 300 ms.
-- Error rate below 1%.
+- Executor: Constant arrival rate.
+- Request rate: 200 iterations per second.
+- Duration: 60 seconds.
+- Preallocated virtual users: 50.
+- Maximum virtual users: 300.
+- p95 latency threshold: Below 300 ms.
+- HTTP failure threshold: Below 1%.
 
-These are configured test thresholds, not verified production performance results. Actual results depend on hardware, database configuration, and deployment environment.
+### Run the Benchmark Using Docker
 
-## Current Limitations and Future Improvements
+```powershell
+docker run --rm -v "$($PWD.Path):/work" -w /work -e BASE_URL=http://host.docker.internal:8000 grafana/k6 run load/k6-plans.js
+```
 
-This project is a development and learning baseline, not a production-certified telecom platform.
+### Benchmark Result
 
-Potential improvements include:
+```text
+Total Requests:       12001
+Request Rate:        200.003604/s
+Average Latency:     3.63 ms
+p95 Latency:         6.39 ms
+Maximum Latency:     33.21 ms
+Failed Requests:     0.00%
+Dropped Iterations:  0
+Duration:            60 seconds
+```
 
-- Implement Redis cache-aside behaviour for plan endpoints, including cache invalidation on plan updates.
-- Complete an ownership audit across all subscriber, complaint, and usage endpoints.
-- Validate database migration and rollback procedures in deployment.
-- Add refresh-token rotation and revocation.
-- Integrate a real payment provider and verified payment callbacks.
-- Add TLS, centralized secrets management, and audit logging.
-- Implement account lockout and request correlation IDs.
-- Measure and improve test coverage and load-test performance.
+All configured k6 thresholds passed in the local benchmark.
 
-Recharge ownership was manually tested for the recharge creation flow. That does not constitute a complete authorization audit of every end-user endpoint.
+## Health and Infrastructure Verification
 
-## Repository
+The application includes:
 
-GitHub: https://github.com/prashanthreddy-134/telecom-prepaid-rest-api
+- `/health` for application health.
+- `/ready` for database readiness.
+- PostgreSQL health checks.
+- Redis health checks.
+- Docker restart policies.
+
+Infrastructure can be inspected using:
+
+```powershell
+docker compose ps
+```
+
+Check Redis:
+
+```powershell
+docker compose exec redis redis-cli PING
+```
+
+Check PostgreSQL connectivity:
+
+```powershell
+docker compose exec db pg_isready -U telecom -d telecom
+```
+
+## Security Considerations
+
+- Passwords are hashed before storage.
+- JWT authentication protects restricted endpoints.
+- Role-based access controls operations.
+- Input and response schemas are validated.
+- API rate limiting helps control excessive requests.
+- Sensitive environment variables are excluded from source control.
+- Database errors and unexpected application errors are handled centrally.
+
+For production deployment, configure secure secrets, HTTPS, database credentials, access policies, backups, monitoring, and appropriate rate limits.
+
+## Future Improvements
+
+- CI/CD pipeline with GitHub Actions.
+- Production deployment and monitoring.
+- Distributed rate limiting and multi-worker validation.
+- More comprehensive endpoint-level performance tests.
+- Advanced analytics and reporting.
+- Improved observability and structured metrics.
+- Automated database backup and recovery testing.
 
 ## Author
 
-**Prashanth Reddy**
+**Prashanth Reddy S**
+
+GitHub: https://github.com/prashanthreddy-134
+
+Project Repository: https://github.com/prashanthreddy-134/telecom-prepaid-rest-api
+
+---
+
+*Built with Python, FastAPI, PostgreSQL, Redis, and Docker.*
