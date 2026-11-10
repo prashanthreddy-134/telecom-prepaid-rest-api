@@ -1,0 +1,46 @@
+
+name: Telecom API CI
+
+'on':
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: "sqlite+pysqlite:///:memory:"
+      SECRET_KEY: "ci-only-secret-key-that-is-long-enough-123456789"
+      RATE_LIMIT: "120/minute"
+      PLANS_RATE_LIMIT: "200/minute"
+      REDIS_URL: "redis://localhost:6379/0"
+      PLAN_CACHE_TTL_SECONDS: "60"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        run: |
+          python -m pytest --cov=app --cov-report=term-missing --cov-report=xml
