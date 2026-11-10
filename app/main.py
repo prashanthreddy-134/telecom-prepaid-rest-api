@@ -23,7 +23,14 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core import get_db, settings
-
+from app.cache import (
+    get_plan_cache_generation,
+    get_json,
+    set_json,
+    invalidate_plan_cache,
+    build_plan_list_cache_key,
+    build_plan_detail_cache_key,
+)
 from app.models import (
     User,
     Circle,
@@ -33,7 +40,6 @@ from app.models import (
     Complaint,
     UsageRecord,
 )
-
 from app.schemas import (
     Register,
     UserOut,
@@ -57,7 +63,6 @@ from app.schemas import (
     UsageOut,
     UsageListOut,
 )
-
 from app.security import (
     hash_pw,
     verify_pw,
@@ -65,9 +70,7 @@ from app.security import (
     current_user,
     roles,
 )
-
 from app.repositories import page, save
-
 from app.services import (
     add_subscriber,
     add_recharge,
@@ -157,13 +160,11 @@ async def safe_error(request: Request, exc: Exception):
 
 @app.get("/health", tags=["system"])
 def health():
-    # Basic application liveness check.
     return {"status": "ok"}
 
 
 @app.get("/ready", tags=["system"])
 def readiness(db: Session = Depends(get_db)):
-    # Check whether the database is reachable.
     try:
         db.execute(select(1))
         return {"status": "ready", "database": "connected"}
@@ -204,7 +205,6 @@ def register(
             detail="Email exists",
         )
 
-    # Public registration always creates a normal user.
     user = User(
         email=d.email,
         password_hash=hash_pw(d.password),
@@ -267,6 +267,7 @@ def me(
 # PLANS
 # Public: list and view.
 # Admin: create, update and deactivate.
+# Redis cache: list and detail endpoints.
 # ============================================================
 
 @app.get(
@@ -290,11 +291,31 @@ def plans(
     size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
+    normalized_q = q.strip() if q and q.strip() else None
+
+    generation = get_plan_cache_generation()
+    cache_key = None
+
+    if generation is not None:
+        cache_key = build_plan_list_cache_key(
+            generation,
+            normalized_q,
+            max_price_paise,
+            min_data_mb,
+            page_num,
+            size,
+        )
+
+        cached = get_json(cache_key)
+
+        if cached is not None:
+            return cached
+
     filters = [Plan.is_active.is_(True)]
 
-    if q and q.strip():
+    if normalized_q:
         filters.append(
-            Plan.name.ilike(f"%{q.strip()}%")
+            Plan.name.ilike(f"%{normalized_q}%")
         )
 
     if max_price_paise is not None:
@@ -307,13 +328,22 @@ def plans(
             Plan.data_mb >= min_data_mb
         )
 
-    return page(
+    result = page(
         db,
         Plan,
         page_num,
         size,
         filters,
     )
+
+    response = PlanListOut.model_validate(
+        result
+    ).model_dump(mode="json")
+
+    if cache_key is not None:
+        set_json(cache_key, response)
+
+    return response
 
 
 @app.get(
@@ -325,6 +355,20 @@ def plan(
     id: int,
     db: Session = Depends(get_db),
 ):
+    generation = get_plan_cache_generation()
+    cache_key = None
+
+    if generation is not None:
+        cache_key = build_plan_detail_cache_key(
+            generation,
+            id,
+        )
+
+        cached = get_json(cache_key)
+
+        if cached is not None:
+            return cached
+
     record = db.get(Plan, id)
 
     if not record or not record.is_active:
@@ -333,7 +377,14 @@ def plan(
             detail="Plan not found",
         )
 
-    return record
+    response = PlanOut.model_validate(
+        record
+    ).model_dump(mode="json")
+
+    if cache_key is not None:
+        set_json(cache_key, response)
+
+    return response
 
 
 @app.post(
@@ -347,10 +398,15 @@ def plan_create(
     db: Session = Depends(get_db),
     u=Depends(roles("admin")),
 ):
-    return save(
+    record = save(
         db,
         Plan(**d.model_dump()),
     )
+
+    # Invalidate cached plan responses after successful creation.
+    invalidate_plan_cache()
+
+    return record
 
 
 @app.put(
@@ -386,6 +442,9 @@ def plan_update(
             detail="Plan update conflicts with existing data",
         )
 
+    # Invalidate only after the database update succeeds.
+    invalidate_plan_cache()
+
     return record
 
 
@@ -418,6 +477,9 @@ def plan_delete(
             status_code=409,
             detail="Unable to deactivate plan",
         )
+
+    # Invalidate cached list and detail responses.
+    invalidate_plan_cache()
 
 
 # ============================================================
@@ -708,7 +770,6 @@ def subscriber_update(
                 detail="Plan is inactive",
             )
 
-    # Ownership cannot be changed through this endpoint.
     update_data = d.model_dump(
         exclude={"user_id"}
     )

@@ -1,9 +1,14 @@
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
+
+# ============================================================
+# APPLICATION SETTINGS
+# ============================================================
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -14,14 +19,29 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./telecom.db"
 
+    # Security configuration
     # No insecure default secret.
     secret_key: str = Field(min_length=32)
 
+    # API rate limiting
     rate_limit: str = "120/minute"
+
+    # Redis cache configuration
+    redis_url: str = "redis://localhost:6379/0"
+
+    plan_cache_ttl_seconds: int = Field(
+        default=60,
+        gt=0,
+        le=3600,
+    )
 
 
 settings = Settings()
 
+
+# ============================================================
+# DATABASE CONFIGURATION
+# ============================================================
 
 is_sqlite = settings.database_url.startswith("sqlite")
 
@@ -36,8 +56,12 @@ engine = create_engine(
 )
 
 
-# Enforce foreign-key constraints in SQLite.
+# ============================================================
+# SQLITE FOREIGN KEY SUPPORT
+# ============================================================
+
 if is_sqlite:
+
     @event.listens_for(engine, "connect")
     def enable_sqlite_foreign_keys(
         dbapi_connection,
@@ -48,6 +72,10 @@ if is_sqlite:
         cursor.close()
 
 
+# ============================================================
+# DATABASE SESSION
+# ============================================================
+
 SessionLocal = sessionmaker(
     bind=engine,
     autoflush=False,
@@ -55,9 +83,17 @@ SessionLocal = sessionmaker(
 )
 
 
+# ============================================================
+# SQLALCHEMY BASE
+# ============================================================
+
 class Base(DeclarativeBase):
     pass
 
+
+# ============================================================
+# DATABASE DEPENDENCY
+# ============================================================
 
 def get_db():
     db = SessionLocal()
