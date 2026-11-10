@@ -3,6 +3,7 @@ import json
 import logging
 import time
 from typing import Literal
+ 
 
 from fastapi import (
     FastAPI,
@@ -191,7 +192,9 @@ def readiness(db: Session = Depends(get_db)):
     status_code=201,
     tags=["auth"],
 )
+@limiter.limit("5/hour")
 def register(
+    request: Request,
     d: Register,
     db: Session = Depends(get_db),
 ):
