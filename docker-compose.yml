@@ -7,7 +7,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+psycopg://telecom:telecom_dev_password@db:5432/telecom
+      DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379/0
       RATE_LIMIT: ${RATE_LIMIT:-120/minute}
       PLANS_RATE_LIMIT: ${PLANS_RATE_LIMIT:-200/minute}
@@ -24,7 +24,7 @@ services:
     environment:
       POSTGRES_DB: telecom
       POSTGRES_USER: telecom
-      POSTGRES_PASSWORD: telecom_dev_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U telecom -d telecom"]
       interval: 5s
